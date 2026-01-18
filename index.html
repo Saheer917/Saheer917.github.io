@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice</title>
+    <title>Smart Receipt Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         /* --- Global Reset & Layout --- */
@@ -25,7 +25,7 @@
             gap: 30px;
             justify-content: center;
             width: 100%;
-            max-width: 1100px;
+            max-width: 1100px; /* Made slightly wider to fit extra input */
         }
 
         /* --- Editor Panel --- */
@@ -41,17 +41,21 @@
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; font-size: 13px; font-weight: 600; color: #666; margin-bottom: 5px; }
         .input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
-        
-        /* Revised Item Row to include Amount override */
+
+        /* Item Row Styling */
         .item-row { display: flex; gap: 5px; margin-bottom: 10px; align-items: center; }
-        .item-row input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        .item-row input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+
         .item-row .qty { width: 50px; }
         .item-row .desc { flex-grow: 1; }
         .item-row .rate { width: 70px; }
-        .item-row .amt-input { width: 80px; background-color: #f9f9f9; }
+        /* New Manual Amount Input Style */
+        .item-row .amt-manual { width: 80px; background-color: #f8f9fa; border-color: #cfd8dc; font-weight: bold; color: #333; }
+        .item-row .amt-manual:focus { background-color: #fff; border-color: #1565c0; }
+
         .remove-btn { background: #ffebee; color: #c62828; border: none; cursor: pointer; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
-        
         .add-btn { background-color: #e3f2fd; color: #1565c0; border: 1px dashed #1565c0; width: 100%; padding: 10px; cursor: pointer; border-radius: 6px; margin-bottom: 20px; }
+        .add-btn:hover { background-color: #bbdefb; }
 
         /* --- Receipt Preview --- */
         .receipt-wrapper { flex: 0 0 auto; }
@@ -62,6 +66,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             font-family: 'Courier New', Courier, monospace;
             color: #000;
+            position: relative;
         }
 
         .r-center { text-align: center; }
@@ -71,11 +76,11 @@
         .r-divider { border-bottom: 2px solid #000; margin: 10px 0; }
         .r-invoice-title { font-size: 18px; margin: 15px 0 5px 0; }
 
+        /* Table Alignment */
         .r-table { width: 100%; font-size: 14px; border-collapse: collapse; }
         .r-table th { border-bottom: 1px dashed #000; padding-bottom: 5px; text-align: left; }
         .r-table td { padding: 4px 0; vertical-align: top; }
 
-        /* Alignments */
         .r-table th:nth-child(1), .r-table td:nth-child(1) { width: 10%; text-align: left; }
         .r-table th:nth-child(2), .r-table td:nth-child(2) { width: 45%; text-align: left; }
         .r-table th:nth-child(3), .r-table td:nth-child(3) { width: 22%; text-align: right; }
@@ -91,9 +96,10 @@
         .btn-dl { background-color: #2e7d32; }
 
         @media print {
-            body { background: white; padding: 0; }
+            body { background: white; padding: 0; margin: 0; }
             .editor-panel, .actions { display: none !important; }
-            #receipt-box { box-shadow: none; width: 100%; }
+            .receipt-wrapper { width: 100%; margin: 0; }
+            #receipt-box { box-shadow: none; width: 100%; max-width: 100%; margin: 0; padding: 0; }
         }
         @media (max-width: 768px) {
             .app-container { flex-direction: column; }
@@ -104,13 +110,21 @@
 <body>
 
 <div class="app-container">
+
     <div class="editor-panel">
-        <h2>Receipt Editor</h2>
+        <h2>Receipt Details</h2>
+
         <div class="input-group">
-            <label>Company/Address/Contact (Header Info)</label>
+            <label>Company Name</label>
             <input type="text" id="in-comp-name" value="Premium Graphics (Pvt) Ltd." oninput="updateReceipt()">
-            <input type="text" id="in-addr" value="#185, Main Street, Sainthamaruthu - 01." oninput="updateReceipt()" style="margin-top:5px">
-            <input type="text" id="in-contact" value="Mob : 074 0069 589 / 075 4449 234" oninput="updateReceipt()" style="margin-top:5px">
+        </div>
+        <div class="input-group">
+            <label>Address Line</label>
+            <input type="text" id="in-addr" value="#185, Main Street, Sainthamaruthu - 01." oninput="updateReceipt()">
+        </div>
+        <div class="input-group">
+            <label>Contact Info</label>
+            <input type="text" id="in-contact" value="Mob : 074 0069 589 / 075 4449 234" oninput="updateReceipt()">
         </div>
         <div class="input-group">
             <label>Date</label>
@@ -118,10 +132,14 @@
         </div>
 
         <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-        
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-            <label style="font-weight:600; color:#666;">Items (Qty | Item | Rate | Amount)</label>
+
+        <div style="display:flex; gap:5px; margin-bottom:5px; padding-right:40px;">
+            <label style="width:50px; font-size:12px;">Qty</label>
+            <label style="flex-grow:1; font-size:12px;">Item Name</label>
+            <label style="width:70px; font-size:12px;">Rate</label>
+            <label style="width:80px; font-size:12px;">Amount</label>
         </div>
+
         <div id="items-container"></div>
         <button class="add-btn" onclick="addNewItem()">+ Add Item</button>
 
@@ -135,7 +153,7 @@
         <div id="receipt-box">
             <div class="r-center r-header">
                 <h1 id="r-comp-name">Premium Graphics (Pvt) Ltd.</h1>
-                <p id="r-addr">#185 C, Main Street, Sainthamaruthu - 01.</p>
+                <p id="r-addr">#185, Main Street, Sainthamaruthu - 01.</p>
                 <p id="r-contact">Mob : 074 0069 589 / 075 4449 234</p>
             </div>
             <div class="r-divider"></div>
@@ -187,9 +205,9 @@
 
 <script>
     document.getElementById('in-date').valueAsDate = new Date();
-    
-    // manualAmount track if the user has manually edited the amount
-    let items = [{ qty: 6, desc: "ID CARD PRINT", rate: 200, amount: 1200, isManual: false }];
+
+    // items now stores 'amount' explicitly
+    let items = [{ qty: 6, desc: "ID CARD PRINT", rate: 200, amount: 1200 }];
 
     function renderInputList() {
         const container = document.getElementById('items-container');
@@ -198,55 +216,62 @@
             const row = document.createElement('div');
             row.className = 'item-row';
             row.innerHTML = `
-                <input type="number" class="qty" title="Qty" value="${item.qty}" oninput="updateItem(${index}, 'qty', this.value)">
-                <input type="text" class="desc" title="Item Name" value="${item.desc}" oninput="updateItem(${index}, 'desc', this.value)">
-                <input type="number" class="rate" title="Rate" value="${item.rate}" oninput="updateItem(${index}, 'rate', this.value)">
-                <input type="number" class="amt-input" title="Amount (Editable)" value="${item.amount}" oninput="updateItem(${index}, 'amount', this.value)">
+                <input type="number" class="qty" value="${item.qty}" oninput="updateItem(${index}, 'qty', this.value)">
+                <input type="text" class="desc" value="${item.desc}" oninput="updateItem(${index}, 'desc', this.value)">
+                <input type="number" class="rate" value="${item.rate}" oninput="updateItem(${index}, 'rate', this.value)">
+
+                <input type="number" class="amt-manual" value="${item.amount}" oninput="updateItem(${index}, 'amount', this.value)">
+
                 <button class="remove-btn" onclick="removeItem(${index})">x</button>
             `;
             container.appendChild(row);
         });
-        calculateAndUpdate();
+        calculateAndUpdate(false); // Update totals without re-rendering inputs (prevents focus loss)
     }
 
-    function addNewItem() { 
-        items.push({ qty: 1, desc: "", rate: 0, amount: 0, isManual: false }); 
-        renderInputList(); 
+    function addNewItem() {
+        items.push({ qty: 1, desc: "", rate: 0, amount: 0 });
+        renderInputList();
     }
-    
-    function removeItem(index) { 
-        items.splice(index, 1); 
-        renderInputList(); 
+
+    function removeItem(index) {
+        items.splice(index, 1);
+        renderInputList();
     }
 
     function updateItem(index, field, value) {
-        if (field === 'amount') {
-            items[index].amount = parseFloat(value) || 0;
-            items[index].isManual = true; // User touched the amount, stop auto-calc for this row
-        } else if (field === 'qty' || field === 'rate') {
-            items[index][field] = (field === 'qty') ? parseInt(value) || 0 : parseFloat(value) || 0;
-            // Only auto-calculate if the user hasn't manually overridden the amount
-            if (!items[index].isManual) {
-                items[index].amount = items[index].qty * items[index].rate;
-            }
-        } else {
-            items[index][field] = value;
+        // Update the basic field
+        if (field === 'desc') {
+            items[index].desc = value;
         }
-        
-        // Refresh the amount input visually in the editor without re-rendering everything
-        const amtInputs = document.querySelectorAll('.amt-input');
-        if (amtInputs[index]) amtInputs[index].value = items[index].amount;
-        
-        calculateAndUpdate(false); // Update receipt but don't re-render editor list to avoid losing focus
+        else if (field === 'qty' || field === 'rate') {
+            // IF USER CHANGES QTY OR RATE: Auto-Calculate Amount
+            items[index][field] = parseFloat(value) || 0;
+            items[index].amount = items[index].qty * items[index].rate;
+
+            // Update the amount input visually immediately
+            // (We do this manually here so we don't have to re-render the whole list and lose focus)
+            const row = document.getElementById('items-container').children[index];
+            row.querySelector('.amt-manual').value = items[index].amount;
+        }
+        else if (field === 'amount') {
+            // IF USER CHANGES AMOUNT MANUALLY: Just save it
+            items[index].amount = parseFloat(value) || 0;
+        }
+
+        calculateAndUpdate(false);
     }
 
-    function calculateAndUpdate(shouldRenderList = true) {
+    function calculateAndUpdate(shouldRender = true) {
+        // 1. Build Receipt Table
         const tbody = document.getElementById('r-tbody');
         tbody.innerHTML = '';
         let total = 0;
-        
+
         items.forEach(item => {
+            // Use the stored 'amount' (whether auto-calc or manual)
             total += item.amount;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${item.qty}</td>
@@ -257,15 +282,18 @@
             tbody.appendChild(tr);
         });
 
+        // 2. Calculate Totals
         const advance = parseFloat(document.getElementById('in-advance').value) || 0;
         const balance = total - advance;
 
         document.getElementById('r-total').innerText = total.toFixed(2);
         document.getElementById('r-advance').innerText = advance.toFixed(2);
         document.getElementById('r-balance').innerText = balance.toFixed(2);
+
         updateReceipt();
-        
-        if(shouldRenderList) renderInputList();
+
+        // Only re-render inputs if explicitly asked (adds items/removes items)
+        if(shouldRender) renderInputList();
     }
 
     function updateReceipt() {
@@ -277,7 +305,7 @@
 
     function downloadImage() {
         const receipt = document.getElementById('receipt-box');
-        html2canvas(receipt, { scale: 3 }).then(canvas => {
+        html2canvas(receipt, { scale: 2 }).then(canvas => {
             const link = document.createElement('a');
             link.download = 'Receipt.png';
             link.href = canvas.toDataURL('image/png');
@@ -285,8 +313,7 @@
         });
     }
 
-    renderInputList();
+    renderInputList(); // Initial Load
 </script>
 </body>
 </html>
-
